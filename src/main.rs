@@ -1,23 +1,16 @@
+mod components;
+mod map;
+
 use bevy_ecs::prelude::*;
 use rltk::{GameState, Rltk, VirtualKeyCode, RGB};
 use std::cmp::{max, min};
 
-struct Player;
-
-struct Position {
-    x: i32,
-    y: i32,
-}
-
-struct Renderable {
-    glyph: rltk::FontCharType,
-    fg: RGB,
-    bg: RGB,
-}
+use components::*;
+use map::*;
 
 struct State {
     ecs: World,
-    schedule: Schedule,
+    // schedule: Schedule,
 }
 
 fn handle_player_movement(delta_x: i32, delta_y: i32, ecs: &mut World) {
@@ -50,6 +43,10 @@ impl GameState for State {
 
         handle_input(self, ctx);
 
+        if let Some(map) = self.ecs.get_resource::<Vec<TileType>>() {
+            draw_map(map, ctx);
+        }
+
         let mut query = self.ecs.query::<(&Position, &Renderable)>();
         for (pos, render) in query.iter(&self.ecs) {
             ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
@@ -65,7 +62,7 @@ fn main() -> rltk::BError {
 
     let mut gs = State {
         ecs: World::new(),
-        schedule: Schedule::default(),
+        // schedule: Schedule::default(),
     };
 
     gs.ecs
@@ -74,9 +71,20 @@ fn main() -> rltk::BError {
         .insert(Position { x: 40, y: 25 })
         .insert(Renderable {
             glyph: rltk::to_cp437('@'),
+            fg: RGB::named(rltk::WHITE),
+            bg: RGB::named(rltk::BLACK),
+        });
+
+    gs.ecs
+        .spawn()
+        .insert(Position { x: 35, y: 25 })
+        .insert(Renderable {
+            glyph: rltk::to_cp437('@'),
             fg: RGB::named(rltk::YELLOW),
             bg: RGB::named(rltk::BLACK),
         });
+
+    gs.ecs.insert_resource(new_map());
 
     // let mut update = SystemStage::parallel();
     // gs.schedule.add_stage("update", update);
