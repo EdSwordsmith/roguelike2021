@@ -1,8 +1,9 @@
 mod components;
 mod map;
+mod rect;
 
-use bevy_ecs::prelude::*;
 use rltk::{GameState, Rltk, VirtualKeyCode, RGB};
+use specs::prelude::*;
 use std::cmp::{max, min};
 
 use components::*;
@@ -10,14 +11,19 @@ use map::*;
 
 struct State {
     ecs: World,
-    // schedule: Schedule,
 }
 
 fn handle_player_movement(delta_x: i32, delta_y: i32, ecs: &mut World) {
-    let mut query = ecs.query::<(&Player, &mut Position)>();
-    for (_player, mut pos) in query.iter_mut(ecs) {
-        pos.x = min(79, max(0, pos.x + delta_x));
-        pos.y = min(49, max(0, pos.y + delta_y));
+    let mut positions = ecs.write_storage::<Position>();
+    let players = ecs.read_storage::<Player>();
+    let map = ecs.fetch::<Vec<TileType>>();
+
+    for (_player, pos) in (&players, &mut positions).join() {
+        let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
+        if map[destination_idx] != TileType::Wall {
+            pos.x = min(79, max(0, pos.x + delta_x));
+            pos.y = min(49, max(0, pos.y + delta_y));
+        }
     }
 }
 
@@ -26,10 +32,10 @@ fn handle_input(gs: &mut State, ctx: &mut Rltk) {
         None => {}
         Some(key) => match key {
             // Player Movement
-            VirtualKeyCode::Left => handle_player_movement(-1, 0, &mut gs.ecs),
-            VirtualKeyCode::Right => handle_player_movement(1, 0, &mut gs.ecs),
-            VirtualKeyCode::Up => handle_player_movement(0, -1, &mut gs.ecs),
-            VirtualKeyCode::Down => handle_player_movement(0, 1, &mut gs.ecs),
+            VirtualKeyCode::Left | VirtualKeyCode::A => handle_player_movement(-1, 0, &mut gs.ecs),
+            VirtualKeyCode::Right | VirtualKeyCode::D => handle_player_movement(1, 0, &mut gs.ecs),
+            VirtualKeyCode::Up | VirtualKeyCode::W => handle_player_movement(0, -1, &mut gs.ecs),
+            VirtualKeyCode::Down | VirtualKeyCode::S => handle_player_movement(0, 1, &mut gs.ecs),
             // Exit when escape is pressed
             VirtualKeyCode::Escape => ctx.quit(),
             _ => {}
@@ -42,13 +48,15 @@ impl GameState for State {
         ctx.cls();
 
         handle_input(self, ctx);
+        self.ecs.maintain();
 
-        if let Some(map) = self.ecs.get_resource::<Vec<TileType>>() {
-            draw_map(map, ctx);
-        }
+        let map = self.ecs.fetch::<Vec<TileType>>();
+        draw_map(&map, ctx);
 
-        let mut query = self.ecs.query::<(&Position, &Renderable)>();
-        for (pos, render) in query.iter(&self.ecs) {
+        let positions = self.ecs.read_storage::<Position>();
+        let renderables = self.ecs.read_storage::<Renderable>();
+
+        for (pos, render) in (&positions, &renderables).join() {
             ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph);
         }
     }
@@ -60,34 +68,27 @@ fn main() -> rltk::BError {
         .with_title("Roguelike Tutorial")
         .build()?;
 
-    let mut gs = State {
-        ecs: World::new(),
-        // schedule: Schedule::default(),
-    };
+    let mut gs = State { ecs: World::new() };
+
+    gs.ecs.register::<Position>();
+    gs.ecs.register::<Renderable>();
+    gs.ecs.register::<Player>();
+
+    let (rooms, map) = new_map();
+    let (px, py) = rooms[0].center();
+
+    gs.ecs.insert(map);
 
     gs.ecs
-        .spawn()
-        .insert(Player)
-        .insert(Position { x: 40, y: 25 })
-        .insert(Renderable {
-            glyph: rltk::to_cp437('@'),
-            fg: RGB::named(rltk::WHITE),
-            bg: RGB::named(rltk::BLACK),
-        });
-
-    gs.ecs
-        .spawn()
-        .insert(Position { x: 35, y: 25 })
-        .insert(Renderable {
+        .create_entity()
+        .with(Position { x: px, y: py })
+        .with(Renderable {
             glyph: rltk::to_cp437('@'),
             fg: RGB::named(rltk::YELLOW),
             bg: RGB::named(rltk::BLACK),
-        });
-
-    gs.ecs.insert_resource(new_map());
-
-    // let mut update = SystemStage::parallel();
-    // gs.schedule.add_stage("update", update);
+        })
+        .with(Player {})
+        .build();
 
     rltk::main_loop(context, gs)
 }

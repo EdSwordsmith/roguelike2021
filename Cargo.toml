@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 rltk = "0.8.1"
-bevy_ecs = "0.5.0"
+specs = "0.17.0"
+specs-derive = "0.4.1"
