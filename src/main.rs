@@ -16,11 +16,11 @@ struct State {
 fn handle_player_movement(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
     let players = ecs.read_storage::<Player>();
-    let map = ecs.fetch::<Vec<TileType>>();
+    let map = ecs.fetch::<Map>();
 
     for (_player, pos) in (&players, &mut positions).join() {
-        let destination_idx = xy_idx(pos.x + delta_x, pos.y + delta_y);
-        if map[destination_idx] != TileType::Wall {
+        let destination_idx = map.xy_idx(pos.x + delta_x, pos.y + delta_y);
+        if map.tiles[destination_idx] != TileType::Wall {
             pos.x = min(79, max(0, pos.x + delta_x));
             pos.y = min(49, max(0, pos.y + delta_y));
         }
@@ -50,8 +50,7 @@ impl GameState for State {
         handle_input(self, ctx);
         self.ecs.maintain();
 
-        let map = self.ecs.fetch::<Vec<TileType>>();
-        draw_map(&map, ctx);
+        draw_map(&self.ecs, ctx);
 
         let positions = self.ecs.read_storage::<Position>();
         let renderables = self.ecs.read_storage::<Renderable>();
@@ -74,8 +73,8 @@ fn main() -> rltk::BError {
     gs.ecs.register::<Renderable>();
     gs.ecs.register::<Player>();
 
-    let (rooms, map) = new_map();
-    let (px, py) = rooms[0].center();
+    let map = Map::new_map_rooms_and_corridors();
+    let (px, py) = map.rooms[0].center();
 
     gs.ecs.insert(map);
 
